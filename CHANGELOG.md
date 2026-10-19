@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.4.4 — 2026-10-19
+
+- **Fix the `WSL` preset failing to load**: the `plan-mode` row was copied
+  without its required `config.section`, so
+  `@deepseek-ai/dsh-plan-mode` refused activation and the preset showed
+  "load failed" in the mode picker while the rest of the plugin worked. The
+  shipped standard preset's section text is now carried verbatim; the roster
+  probe reports `wsl: broken=null`.
+- Add the preset-roster diagnostic recipe used to find it (see HANDOVER.md).
+
 ## 0.4.3 — 2026-10-19
 
 - Self-check wording: a probe has no live agent, so the job registry's refusal
