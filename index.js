@@ -29,6 +29,9 @@ import { appendFileSync } from 'node:fs'
 import { resolveConfig } from './src/config.js'
 import { registerPromptSection } from './src/prompt.js'
 import { runSelfCheck } from './src/self-check.js'
+import { registerHomeRoute } from './src/home-route.js'
+import { registerDirRoute } from './src/dir-route.js'
+import { createHomeLookup, ensureWslHomeWorkspace } from './src/session-home.js'
 import { createShellPool } from './src/shell.js'
 import { buildTools } from './src/tools.js'
 
@@ -75,6 +78,18 @@ export function apply(ctx, rawConfig) {
   ctx.effect(() => () => pool.disposeAll(), 'dsh-wsl-bridge: shell pool')
   ctx.on('agent/disposed', ({ agent }) => {
     pool.dispose(agent, 'agent disposed')
+  })
+  const homeWindows = createHomeLookup(pool, config)
+  // Routes stay unwired until the desktop web server exists. Reading it
+  // without inject throws, and the page then gets the app shell instead of JSON.
+  if (typeof ctx.inject === 'function') {
+    ctx.inject(['webServer'], (inner) => {
+      registerHomeRoute(inner, homeWindows)
+      registerDirRoute(inner, pool, config)
+    })
+  }
+  void ensureWslHomeWorkspace(ctx, { pool, config, homeWindows }).catch((error) => {
+    ctx.logger?.warn?.('dsh-wsl-bridge: WSL home workspace not registered: ' + messageOf(error))
   })
 
   const tools = buildTools({ pool, config, subprocess, jobs })

@@ -1,6 +1,19 @@
 # Changelog
 
-## 0.4.6 — 2026-10-19 (unreleased)
+## 0.4.7 — 2026-10-19
+
+- A new conversation that selects WSL lists the current distribution's
+  folders, starting at `$HOME`, and asks which folder should become the
+  workspace. The folder control opens that directory instead of DSH's
+  `default-workspace`. The Windows path is whatever `wslpath -w` prints on
+  that computer. Esc closes the visit; choosing WSL again after leaving the
+  mode asks once more. Host-wide `wsl_*` tools still use the Windows session
+  directory.
+- The picker keeps an opaque surface when a skin makes the app background
+  translucent.
+- The WSL preset description is Chinese.
+
+## 0.4.6 — 2026-10-19
 
 - A `WSL` session now uses the current distribution's `$HOME` as its default
   workspace. The first bash command, relative paths, and grep/glob without a

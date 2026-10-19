@@ -53,9 +53,10 @@ model tool call
   ACLs and extended attributes are not copied from the old inode.
 - **Paths**: Windows drive paths map to `/mnt/<drive>`. Host `wsl_*` tools still
   translate the session directory into the default workdir. A `WSL` session
-  (`defaultWorkdir: home`) reads the distribution's `$HOME` once and uses that
-  path for the initial shell, relative paths, and grep/glob. `wsl_path` prefers
-  the distribution's own `wslpath` and falls back to the host-side mapping.
+  asks for a folder inside the distribution and opens that directory as the
+  workspace (`wslpath -w` of the chosen path). Relative paths and grep/glob
+  follow that workspace. `wsl_path` prefers the distribution's own `wslpath`
+  and falls back to the host-side mapping.
 - **grep/glob** run GNU grep/find inside the distribution (the host search suite
   ships a Windows ripgrep, which cannot see Linux paths). They prune hidden
   entries and `node_modules`/VCS metadata; `.gitignore` is not read (documented).

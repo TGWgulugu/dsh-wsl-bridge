@@ -1,11 +1,12 @@
 {
   "name": "dsh-wsl-bridge",
-  "version": "0.4.6",
+  "version": "0.4.7",
   "type": "module",
   "main": "index.js",
   "exports": {
     ".": "./index.js",
     "./wsl-world": "./wsl-world.js",
+    "./client": "./client.js",
     "./locale/*.json": "./locale/*.json",
     "./icon": "./icon.svg"
   },
@@ -18,6 +19,14 @@
     },
     "bundle": {
       "patch": "./cordis.patch.yml"
+    },
+    "client": {
+      "inject": [
+        "@deepseek-ai/dsh-api-session-controller",
+        "@deepseek-ai/dsh-api-workspace-controller",
+        "@deepseek-ai/dsh-client-ui-workspace"
+      ],
+      "platform": "web"
     }
   },
   "peerDependencies": {
@@ -26,6 +35,7 @@
   "files": [
     "index.js",
     "wsl-world.js",
+    "client.js",
     "src/**/*.js",
     "cordis.patch.yml",
     "locale/*.json",
@@ -48,7 +58,7 @@
     "url": "https://github.com/TGWgulugu/dsh-wsl-bridge/issues"
   },
   "homepage": "https://github.com/TGWgulugu/dsh-wsl-bridge#readme",
-  "description": "Native WSL execution for DeepSeek Harness on Windows: persistent Linux bash, Linux-path file and search tools, and a declarative WSL session mode. No extra web server and nothing to install inside the distribution.",
+  "description": "Native WSL execution for DeepSeek Harness on Windows: persistent Linux bash, Linux-path file and search tools, and a WSL session mode that asks which distribution folder to use as the workspace. No extra web server and nothing to install inside the distribution.",
   "keywords": [
     "dsh",
     "dsh-plugin",
@@ -60,7 +70,7 @@
     "workspace"
   ],
   "scripts": {
-    "test": "node test/protocol.test.js && node test/shell.test.js && node test/tools.test.js && node test/world-tools.test.js && node test/guard.test.js && node test/jobs.test.js && node test/fsops.test.js",
+    "test": "node test/protocol.test.js && node test/shell.test.js && node test/tools.test.js && node test/world-tools.test.js && node test/session-home.test.js && node test/dir-list.test.js && node test/client-workspace.test.js && node test/guard.test.js && node test/jobs.test.js && node test/fsops.test.js",
     "test:integration": "node test/integration.test.js"
   }
 }

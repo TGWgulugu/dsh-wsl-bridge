@@ -4,7 +4,7 @@
 
 在 Windows 上给 [DSH](https://github.com/deepseek-ai/DeepSeek-Harness) 一个原生的 WSL（Linux）执行面。不额外启动 web 服务，也不在 WSL 里安装 dsh。Windows 会话和 WSL 会话在同一个桌面端里使用。
 
-当前版本 **0.4.6**。需要 **Windows**、一个可用的 WSL 发行版，以及 **DSH `>= 0.2.1-rc.2`**。源码：<https://github.com/TGWgulugu/dsh-wsl-bridge>
+当前版本 **0.4.7**。需要 **Windows**、一个可用的 WSL 发行版，以及 **DSH `>= 0.2.1-rc.2`**。源码：<https://github.com/TGWgulugu/dsh-wsl-bridge>
 
 ## 安装
 
@@ -58,17 +58,21 @@ dsh plugin --profile desktop remove dsh-wsl-bridge
 
 新建会话时选择 **WSL**。这一会话里的 `bash`、`read`、`write`、`edit`、`grep`、`glob` 都在 Linux 里执行，参数是 Linux 路径。persona、skill、goal、plan、compaction、subagent、todo、web、present 仍用 DSH 标准会话的那一套。
 
-**默认工作区是当前发行版的家目录（`$HOME`）。** 第一次 `bash` 从家目录开始；相对路径按家目录解析；`grep` 和 `glob` 不传 `path` 时也搜索家目录。要搜 Windows 目录时，显式传入 `/mnt/<盘符>/...`。
+**工作区由你在当前发行版里选定。** 新建对话并选中 WSL 后，窗口从 `$HOME` 列出该发行版的文件夹。可以进入子文件夹，也可以回到上一级，然后用「使用此文件夹」确认。选中的目录用这台电脑上的 `wslpath -w` 现查，不写死发行版名或用户名。右上角的文件夹按钮打开这个目录，而不是 DSH 自带的 `default-workspace`。
+
+按 Esc 或「取消」只关掉这一次。把模式从 WSL 换走，再选回 WSL，窗口会再出现。对话一旦发出第一条消息，DSH 就不再允许更换模式，这个窗口也不会在那条对话里再次出现。
+
+第一次 `bash`、相对路径，以及不传 `path` 的 `grep` / `glob`，都从你选的目录开始。要搜 Windows 目录时，显式传入 `/mnt/<盘符>/...`。上面的 `wsl_*` 工具不走这个窗口，仍使用当前 Windows 会话目录。
 
 | 工具 | 作用 |
 |---|---|
 | `bash` | 发行版里的持久 bash，语法是 bash，不是 PowerShell |
-| `read` / `write` / `edit` | 读写 Linux 路径。相对路径相对 `$HOME` |
-| `grep` | 发行版内的 GNU grep。结果是 `path:line: text`。不传 `path` 时搜 `$HOME` |
-| `glob` | 按 glob 列出文件，旧文件在前。不传 `path` 时列 `$HOME` |
+| `read` / `write` / `edit` | 读写 Linux 路径。相对路径相对你选的工作区 |
+| `grep` | 发行版内的 GNU grep。结果是 `path:line: text`。不传 `path` 时搜你选的工作区 |
+| `glob` | 按 glob 列出文件，旧文件在前。不传 `path` 时列你选的工作区 |
 | `wsl_env` | 发行版信息 |
 
-家目录只查询一次。登录脚本如果往标准输出打字，不会被当成路径。查询失败时，搜索不会退回 Windows 会话目录。
+目录列表从 `$HOME` 开始，只列出这一层的文件夹。登录脚本如果往标准输出打字，不会被当成路径。查不到目录时，不会改去打开 Windows 会话目录。选择窗口使用不透明底色，不跟随会把背景透出来的皮肤。
 
 ## 配置
 
@@ -80,7 +84,7 @@ dsh plugin --profile desktop remove dsh-wsl-bridge
 | `timeoutMs` | `120000` | `bash` / `wsl_bash` 的默认时限（毫秒） |
 | `fileTimeoutMs` | `30000` | 读、写、搜索的单次时限（毫秒） |
 | `maxFileBytes` | `2097152` | `read` / `edit` 最多读取的字节数 |
-| `defaultWorkdir` | 宿主工具是 `session`；WSL 模式是 `home` | `session` 把 Windows 会话目录译成 `/mnt/...`。`home` 使用当前发行版的 `$HOME`。也可以填绝对 Linux 路径 |
+| `defaultWorkdir` | `session` | 宿主 `wsl_*` 工具的 `session` 是当前 Windows 会话目录。WSL 模式的 `session` 是你选的工作区。`home` 使用当前发行版的 `$HOME`。也可以填绝对 Linux 路径 |
 | `dangerGuard` | `true` | 拒绝明显的破坏性命令，除非该次调用带 `allowDangerous: true` |
 | `backgroundJobs` | `true` | 是否允许 `runInBackground`。宿主没有任务注册表时会明确拒绝 |
 | `promptSection` | `true` | 是否加入宿主会话的路由提示 |
@@ -96,7 +100,7 @@ dsh plugin --profile desktop remove dsh-wsl-bridge
 - 只支持 Windows。其他系统上这两行配置会禁用。
 - 工具通过 `wsl.exe` 执行，**不受** DSH 的 Windows 文件沙箱约束。把它看成：发行版里该用户能写的路径，以及通过 `/mnt/<盘符>` 能碰到的 Windows 路径，都可以写。详见 [docs/SECURITY.md](docs/SECURITY.md)。
 - `grep` / `glob` 使用 GNU grep 和 find，不读 `.gitignore`。隐藏文件、`node_modules` 和版本库元数据会跳过。
-- 桌面端选中的 Windows 文件夹仍然是界面上的工作区。WSL 模式的工具默认不再搜那个目录。技能目录和界面上的文件引用仍按 Windows 路径解析。
+- 新建对话选中 WSL 后，从当前发行版里选工作区。右上角的文件夹按钮打开这个目录。技能和文件引用跟着这个工作区走。Esc 只关闭这一次；换走模式再选回 WSL 会再问一次。已开始的对话不能再改模式。
 - 第一次调用要等发行版冷启动，可能要数秒。`timeoutMs` 默认 120 秒。
 - 本插件不在发行版里安装 Node 或其他工具链。
 

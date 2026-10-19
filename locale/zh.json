@@ -1,6 +1,6 @@
 {
   "meta": {
     "title": "WSL 桥",
-    "description": "在 Windows 上给 DSH 原生 WSL 执行面：持久 Linux bash、Linux 路径的文件与搜索工具，以及 WSL 会话模式——不额外起 web 服务，WSL 内无需安装任何东西。"
+    "description": "在 Windows 上给 DSH 原生 WSL 执行面：持久 Linux bash、Linux 路径的文件与搜索工具，以及 WSL 会话模式。新建对话选中 WSL 后，从当前发行版的文件夹里指定工作区。不额外起 web 服务，WSL 内无需安装任何东西。"
   }
 }

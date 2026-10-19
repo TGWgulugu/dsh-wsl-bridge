@@ -4,7 +4,7 @@
 
 A native WSL (Linux) execution surface for [DSH](https://github.com/deepseek-ai/DeepSeek-Harness) on Windows. It starts no extra web server and installs nothing inside the distribution. Windows sessions and WSL sessions share one desktop app.
 
-Version **0.4.6**. Requires **Windows**, a working WSL distribution, and **DSH `>= 0.2.1-rc.2`**. Source: <https://github.com/TGWgulugu/dsh-wsl-bridge>
+Version **0.4.7**. Requires **Windows**, a working WSL distribution, and **DSH `>= 0.2.1-rc.2`**. Source: <https://github.com/TGWgulugu/dsh-wsl-bridge>
 
 ## Install
 
@@ -58,17 +58,21 @@ A routing note is on by default: for Linux work, prefer `wsl_bash` and Linux pat
 
 Choose **WSL** when creating a session. In that session, `bash`, `read`, `write`, `edit`, `grep`, and `glob` run inside Linux and take Linux paths. Persona, skills, goals, plan mode, compaction, subagents, todos, web, and present stay the standard DSH set.
 
-**The default workspace is the current distribution's home directory (`$HOME`).** The first `bash` starts there. Relative paths resolve there. `grep` and `glob` search there when `path` is omitted. Pass `/mnt/<drive>/...` when the search should cover a Windows directory.
+**You choose the workspace inside the current distribution.** On a new conversation, selecting WSL lists that distribution's folders, starting at `$HOME`. Open a subfolder or go up a level, then confirm with "Use this folder". The chosen directory is whatever `wslpath -w` prints on that computer. No distribution name or username is built into the plugin. The folder control opens that directory instead of DSH's `default-workspace`.
+
+Esc or Cancel closes the window for this visit only. Switch the mode away from WSL and back to WSL, and the window asks again. After the first message, DSH no longer allows a mode change, so the window does not return in that conversation.
+
+The first `bash`, relative paths, and `grep` / `glob` without a `path` start in the folder you chose. Pass `/mnt/<drive>/...` when the search should cover a Windows directory. The `wsl_*` tools above do not use this window; they keep using the current Windows session directory.
 
 | Tool | What it does |
 |---|---|
 | `bash` | Persistent bash in the distribution. The syntax is bash, not PowerShell |
-| `read` / `write` / `edit` | Linux paths. Relative paths are relative to `$HOME` |
-| `grep` | GNU grep in the distribution. Rows look like `path:line: text`. Omitting `path` searches `$HOME` |
-| `glob` | Lists files matching a glob, oldest first. Omitting `path` lists `$HOME` |
+| `read` / `write` / `edit` | Linux paths. Relative paths are relative to the folder you chose |
+| `grep` | GNU grep in the distribution. Rows look like `path:line: text`. Omitting `path` searches the folder you chose |
+| `glob` | Lists files matching a glob, oldest first. Omitting `path` lists the folder you chose |
 | `wsl_env` | Distribution facts |
 
-`$HOME` is resolved once. Text that a login profile prints is not treated as the path. If the lookup fails, search does not fall back to the Windows session directory.
+The folder list starts at `$HOME` and shows one level of directories. Text that a login profile prints is not treated as a path. If the lookup fails, the Windows session directory is not opened instead. The picker uses an opaque surface, so a skin that makes the app background translucent does not show through it.
 
 ## Configuration
 
@@ -80,7 +84,7 @@ Set these on the plugin row `config` (`cordis.patch.yml`, or a profile patch tha
 | `timeoutMs` | `120000` | Default deadline for `bash` / `wsl_bash`, in milliseconds |
 | `fileTimeoutMs` | `30000` | Deadline for one read, write, or search |
 | `maxFileBytes` | `2097152` | Maximum bytes `read` / `edit` will load |
-| `defaultWorkdir` | `session` for host tools; `home` for WSL mode | `session` translates the Windows session directory to `/mnt/...`. `home` uses the distribution's `$HOME`. An absolute Linux path is also accepted |
+| `defaultWorkdir` | `session` | For the host `wsl_*` tools, `session` is the current Windows session directory. In WSL mode, `session` is the folder you chose. `home` uses the distribution's `$HOME`. An absolute Linux path is also accepted |
 | `dangerGuard` | `true` | Refuses obviously destructive commands unless that call passes `allowDangerous: true` |
 | `backgroundJobs` | `true` | Allows `runInBackground`. Refuses clearly when the host has no job registry |
 | `promptSection` | `true` | Adds the routing note to host sessions |
@@ -96,7 +100,7 @@ The refusal list covers recursive deletes, block-device writes, power control, `
 - Windows only. Both rows disable themselves on any other host.
 - The tools run through `wsl.exe` and are **not** inside DSH's Windows file sandbox. Treat them as able to write anything that WSL user can write, including Windows paths reached through `/mnt/<drive>`. See [docs/SECURITY.md](docs/SECURITY.md).
 - `grep` / `glob` use GNU grep and find. They do not read `.gitignore`. Hidden files, `node_modules`, and VCS metadata are skipped.
-- The folder selected in the desktop UI stays that UI's workspace. WSL-mode tools no longer search it by default. Skill directories and UI file references still use Windows paths.
+- On a new conversation, WSL mode asks which folder inside the distribution should be the workspace. The folder control opens that directory. Skills and file references follow it. Esc closes that visit; leaving WSL mode and choosing it again asks once more. A conversation that has already started cannot change mode.
 - The first call waits for the distribution to start and can take several seconds. `timeoutMs` defaults to 120 seconds.
 - This plugin does not install Node or any other toolchain inside the distribution.
 
