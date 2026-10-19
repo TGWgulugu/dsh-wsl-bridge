@@ -8,13 +8,13 @@
 
 ## 安装
 
-在普通终端里执行（不要在 DSH 会话的工具沙箱里跑）。`dsh` 不在 PATH 上时，换成 Desktop 自带的 `dsh.cmd` 完整路径。
+插件已发布到 npm：[dsh-wsl-bridge](https://www.npmjs.com/package/dsh-wsl-bridge)。在普通终端里执行下面的命令，DSH 会从 npm 安装这个包。不要在 DSH 会话的工具沙箱里跑。`dsh` 不在 PATH 上时，换成 Desktop 自带的 `dsh.cmd` 完整路径。
 
 ```powershell
 dsh plugin --profile desktop add dsh-wsl-bridge
 ```
 
-尚未发布、或要装当前目录的源码时：
+要装本仓库里的源码，而不是 npm 上的版本时：
 
 ```powershell
 dsh plugin --profile desktop add .

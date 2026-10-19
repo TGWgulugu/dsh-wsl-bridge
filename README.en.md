@@ -8,13 +8,13 @@ Version **0.4.6**. Requires **Windows**, a working WSL distribution, and **DSH `
 
 ## Install
 
-Run this in a normal terminal, not inside a DSH tool sandbox. If `dsh` is not on `PATH`, use the full path to the `dsh.cmd` that ships with DSH Desktop.
+The plugin is published on npm as [dsh-wsl-bridge](https://www.npmjs.com/package/dsh-wsl-bridge). Run this in a normal terminal, not inside a DSH tool sandbox. DSH installs that npm package. If `dsh` is not on `PATH`, use the full path to the `dsh.cmd` that ships with DSH Desktop.
 
 ```powershell
 dsh plugin --profile desktop add dsh-wsl-bridge
 ```
 
-Before the package is published, or to install the checkout you have open:
+To install the source in this repository instead of the npm release:
 
 ```powershell
 dsh plugin --profile desktop add .
