@@ -5,6 +5,7 @@
  * Run: node test/world-tools.test.js
  */
 import assert from 'node:assert/strict'
+import { fileURLToPath } from 'node:url'
 import { globFiles, grepFiles, matchGlob } from '../src/search.js'
 import { buildWorldTools, resolveWorldPath } from '../src/world-tools.js'
 import { resolveConfig } from '../src/config.js'
@@ -65,6 +66,50 @@ await test('world: path resolution handles absolute, Windows and relative paths'
   assert.throws(() => resolveWorldPath('src/a.ts', {}, { ...config, defaultWorkdir: 'home' }), /relative path/)
 })
 
+await test('world: WSL home is the default workspace for bash, relative paths and search', async () => {
+  const pool = makePool({
+    runOnce(request) {
+      const command = String(request.command)
+      if (command.includes('__WSL_HOME__')) return { stdout: 'welcome\n__WSL_HOME__/home/me\n', stderr: '', exitCode: 0 }
+      if (command.includes('grep')) return { stdout: '\n__WSL_GREP_STATUS=1\n', stderr: '', exitCode: 0 }
+      if (command.includes('find ')) return { stdout: '\n__WSL_FIND_STATUS=0\n', stderr: '', exitCode: 0 }
+      if (command.includes('head')) return { stdout: Buffer.from('hi\n').toString('base64'), stderr: '', exitCode: 0 }
+      return { stdout: '', stderr: 'unexpected ' + command, exitCode: 1 }
+    },
+    run(_key, request) {
+      return { stdout: '/home/me\n', stderr: '', exitCode: 0, timeoutMs: request.timeoutMs, signal: null, timedOut: false, aborted: false }
+    },
+  })
+  const homeConfig = resolveConfig({ defaultWorkdir: 'home', timeoutMs: 5_000, fileTimeoutMs: 5_000 })
+  const tools = toolMap(pool, homeConfig)
+  const exec = { agent: { session: { header: { cwd: 'D:\\proj' } } } }
+  const bash = await tools.get('bash').execute({ command: 'pwd', description: 'pwd' }, exec)
+  assert.match(bash.text, /\/home\/me/)
+  assert.equal(pool.calls.run[0].request.workdir, '/home/me')
+  const read = await tools.get('read').execute({ path: 'notes.txt' }, exec)
+  assert.match(read.text, /hi/)
+  assert.match(pool.calls.runOnce.map((call) => call.command).join('\n'), /\/home\/me\/notes\.txt/)
+  const grep = await tools.get('grep').execute({ pattern: 'x' }, exec)
+  assert.match(grep.text, /No matches in \/home\/me/)
+  assert.doesNotMatch(pool.calls.runOnce.at(-1).command, /\/mnt\/d\/proj/)
+  const before = pool.calls.runOnce.length
+  await tools.get('glob').execute({ pattern: '*' }, exec)
+  assert.equal(pool.calls.runOnce.length, before + 1)
+  assert.match(pool.calls.runOnce.at(-1).command, /find '\/home\/me'/)
+})
+
+await test('world: a failed home lookup does not search the Windows session', async () => {
+  const pool = makePool({
+    runOnce: () => ({ stdout: '', stderr: 'wsl unavailable', exitCode: 1 }),
+  })
+  const tools = toolMap(pool, resolveConfig({ defaultWorkdir: 'home', fileTimeoutMs: 5_000 }))
+  await assert.rejects(
+    () => tools.get('grep').execute({ pattern: 'x' }, { agent: { session: { header: { cwd: 'D:\\proj' } } } }),
+    /home directory/,
+  )
+  assert.equal(pool.calls.runOnce.length, 1)
+})
+
 await test('world bash: uses the session directory and renders the exit marker', async () => {
   const pool = makePool({
     run: (_key, request) => ({
@@ -92,7 +137,7 @@ await test('world grep: normalizes rows and reports the cap', async () => {
   const value = await tools.get('grep').execute({ pattern: 'hel', path: '/proj' }, {})
   assert.match(value.text, /src\/a\.ts:3: hello/)
   assert.match(value.text, /src\/b\.ts:9: world/)
-  assert.match(pool.calls.runOnce[0].command, /grep -rnIE/u)
+  assert.match(pool.calls.runOnce[0].command, /grep -rnHIE/u)
 })
 
 await test('world grep: exit status 2 is a failure, 1 is "no matches"', async () => {
@@ -144,7 +189,7 @@ await test('search: grep rejects an invalid include shape safely', async () => {
 })
 
 await test('world apply: registers the preset tool set and writes the mount marker', async () => {
-  const marker = 'D:\\try\\experiment\\plugins\\dsh-wsl-bridge\\test\\.world-marker.log'
+  const marker = fileURLToPath(new URL('./.world-marker.log', import.meta.url))
   process.env.DSH_WSL_BRIDGE_WORLD_MARKER = marker
   try {
     const fake = createFakeContext()
@@ -169,6 +214,32 @@ await test('world apply: a broken config only logs, never throws', () => {
   apply(fake.ctx, { timeoutMs: 1 })
   assert.equal(fake.tools.size, 0)
   assert.ok(fake.log.some((line) => line.includes('error')))
+})
+
+await test('search: timeout and launcher failures are not empty successes', async () => {
+  for (const result of [
+    { stdout: '', stderr: '', exitCode: 124, timedOut: true },
+    { stdout: '', stderr: '', exitCode: null, aborted: true },
+    { stdout: '', stderr: 'WSL unavailable', exitCode: 1 },
+  ]) {
+    const pool = makePool({ runOnce: () => result })
+    assert.notEqual((await grepFiles(pool, { root: '/proj', pattern: 'x' })).error, null)
+    await assert.rejects(() => globFiles(pool, { root: '/proj', pattern: '*' }), /glob failed/)
+  }
+})
+
+await test('grep: marker text in matching content cannot forge final status', async () => {
+  const pool = makePool({ runOnce: () => ({
+    stdout: '/proj/a:1:__WSL_GREP_STATUS=2\n\n__WSL_GREP_STATUS=0\n', stderr: '', exitCode: 0,
+  }) })
+  assert.equal((await grepFiles(pool, { root: '/proj', pattern: 'STATUS' })).error, null)
+})
+
+await test('glob: hidden files are excluded and find errors surface', async () => {
+  const pool = makePool({ runOnce: () => ({ stdout: '1 /proj/.env\n2 /proj/a.js\n', stderr: '', exitCode: 0 }) })
+  assert.deepEqual((await globFiles(pool, { root: '/proj', pattern: '*' })).files, ['a.js'])
+  const bad = makePool({ runOnce: () => ({ stdout: '\n__WSL_FIND_STATUS=1\n', stderr: 'missing', exitCode: 0 }) })
+  await assert.rejects(() => globFiles(bad, { root: '/missing', pattern: '*' }), /missing/)
 })
 
 console.log('\n' + String(passed) + ' passed, ' + String(failed) + ' failed')

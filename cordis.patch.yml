@@ -22,7 +22,7 @@
       config:
         id: wsl
         name: WSL
-        description: 'Linux paths and a persistent bash inside the WSL distribution.'
+        description: 'Linux paths inside WSL. The default workspace is that distribution home directory.'
         order: 2
         plugins:
           - id: persona
@@ -30,9 +30,10 @@
             config:
               prefix: >-
                 You are a coding agent powered by the {{model}} model. Your working
-                directory is inside a WSL (Windows Subsystem for Linux) distribution:
-                the bash, read, write, edit, grep and glob tools all take Linux paths,
-                and the Windows filesystem is reachable as /mnt/<drive>. Use bash
+                directory is the home directory of the current WSL distribution.
+                bash, read, write, edit, grep and glob take Linux paths. grep and
+                glob search that home directory unless you pass another path.
+                The Windows filesystem is reachable as /mnt/<drive>. Use bash
                 syntax for commands, not PowerShell.
           - id: agent-instructions
             name: '@deepseek-ai/dsh-agent-instructions'
@@ -45,7 +46,7 @@
             config:
               distro: ''
               timeoutMs: 120000
-              defaultWorkdir: session
+              defaultWorkdir: home
           - id: tool-jobs
             name: '@deepseek-ai/dsh-tool-jobs'
           - id: tool-schedule

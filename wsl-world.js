@@ -13,7 +13,9 @@
  * @module dsh-wsl-bridge/wsl-world
  */
 import { appendFileSync } from 'node:fs'
+import { fileURLToPath } from 'node:url'
 import { resolveConfig } from './src/config.js'
+import { windowsPathToLinux } from './src/paths.js'
 import { createShellPool } from './src/shell.js'
 import { buildWorldTools } from './src/world-tools.js'
 
@@ -102,7 +104,9 @@ async function worldSelfCheck(ctx, pool, tools, marker) {
   // so the probe waits one tick and retries once, recording both attempts.
   await new Promise((resolve) => setTimeout(resolve, 1_500))
   const bash = tools.find((tool) => tool.name === 'bash')
-  const exec = { agent: { session: { header: { cwd: 'D:\\try\\experiment' } } } }
+  const packageDir = fileURLToPath(new URL('.', import.meta.url))
+  const linuxDir = windowsPathToLinux(packageDir)?.replace(/\/+$/u, '') ?? ''
+  const exec = { agent: { session: { header: { cwd: packageDir } } } }
   for (let attempt = 1; attempt <= 2; attempt += 1) {
     try {
       const value = await bash.execute({ command: 'echo WORLD_OK; pwd', description: 'world self-check' }, exec)
@@ -114,23 +118,27 @@ async function worldSelfCheck(ctx, pool, tools, marker) {
     }
     await new Promise((resolve) => setTimeout(resolve, 1_500))
   }
-  // Real grep / glob against the workspace, through the same preset-scope tools.
-  try {
-    const grep = tools.find((tool) => tool.name === 'grep')
-    const hit = await grep.execute({
-      pattern: 'dsh-wsl-bridge',
-      path: '/mnt/d/try/experiment/plugins/dsh-wsl-bridge/README.md',
-    }, exec)
-    lines.push('grep exit=' + String(hit.exitCode) + ' first=' + hit.text.split('\n').slice(0, 2).join(' | '))
-    const glob = tools.find((tool) => tool.name === 'glob')
-    const files = await glob.execute({
-      pattern: '*.js',
-      path: '/mnt/d/try/experiment/plugins/dsh-wsl-bridge/src',
-    }, exec)
-    lines.push('glob count=' + String(files.text.split('\n').filter((line) => line !== '').length)
-      + ' first=' + files.text.split('\n')[0])
-  } catch (error) {
-    lines.push('search ERROR=' + messageOf(error))
+  // Real grep / glob against this package, through the same preset-scope tools.
+  if (linuxDir === '') {
+    lines.push('search SKIP=package path is not a Windows path')
+  } else {
+    try {
+      const grep = tools.find((tool) => tool.name === 'grep')
+      const hit = await grep.execute({
+        pattern: 'dsh-wsl-bridge',
+        path: linuxDir + '/README.md',
+      }, exec)
+      lines.push('grep exit=' + String(hit.exitCode) + ' first=' + hit.text.split('\n').slice(0, 2).join(' | '))
+      const glob = tools.find((tool) => tool.name === 'glob')
+      const files = await glob.execute({
+        pattern: '*.js',
+        path: linuxDir + '/src',
+      }, exec)
+      lines.push('glob count=' + String(files.text.split('\n').filter((line) => line !== '').length)
+        + ' first=' + files.text.split('\n')[0])
+    } catch (error) {
+      lines.push('search ERROR=' + messageOf(error))
+    }
   }
   pool.dispose(exec.agent, 'world self-check shell')
   const record = lines.join('\n') + '\n'

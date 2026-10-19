@@ -17,3 +17,5 @@ jobs:
           node-version: ${{ matrix.node }}
       - name: Unit tests (fake host only, no WSL required)
         run: npm test
+      - name: Release script preflight (mocked npm and git)
+        run: pwsh -NoProfile -File test/release.test.ps1

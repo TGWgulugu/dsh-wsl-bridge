@@ -8,6 +8,7 @@
  * with piped stdio and fails with EPERM).
  */
 import assert from 'node:assert/strict'
+import { createHash } from 'node:crypto'
 import { resolveConfig } from '../src/config.js'
 import { apply } from '../index.js'
 import { ensureLinuxPath, isWindowsPath, linuxPathToWindows, toLinuxWorkdir, windowsPathToLinux } from '../src/paths.js'
@@ -173,10 +174,7 @@ await test('wsl_write: sends base64 on stdin and reports sha256', async () => {
 await test('wsl_write: stale fence refuses the write', async () => {
   const pool = makePool({
     runOnce: (request) => {
-      if (request.command.startsWith('sha256sum')) {
-        return { stdout: 'different\n', stderr: '', exitCode: 0 }
-      }
-      return { stdout: '', stderr: '', exitCode: 0 }
+      return { stdout: 'different\n', stderr: '', exitCode: 73 }
     },
   })
   const tools = toolMap(pool, config)
@@ -191,12 +189,10 @@ await test('wsl_edit: unique replacement writes the edited content', async () =>
   const original = 'alpha beta\n'
   const pool = makePool({
     runOnce: (request) => {
-      if (request.command.startsWith('head -c')) {
+      if (request.command.includes('head -c')) {
         return { stdout: Buffer.from(original).toString('base64'), stderr: '', exitCode: 0 }
       }
-      if (request.command.startsWith('sha256sum')) {
-        return { stdout: 'old-sha\n', stderr: '', exitCode: 0 }
-      }
+      assert.ok(request.command.includes(createHash('sha256').update(original).digest('hex')))
       return { stdout: 'new-sha\n', stderr: '', exitCode: 0 }
     },
   })

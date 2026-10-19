@@ -192,6 +192,18 @@ await test('jobs: the destructive guard runs before a background registration', 
   assert.equal(jobs.specs.length, 0)
 })
 
+for (const [build, name] of [[buildTools, 'wsl_bash'], [buildWorldTools, 'bash']]) {
+  await test(name + ': background keeps session cwd after a persistent call', async () => {
+    const spawns = []
+    const jobs = makeJobs()
+    const pool = { has: () => true }
+    const tool = build({ pool, config, jobs, subprocess: makeSubprocess(spawns) }).find((tool) => tool.name === name)
+    await tool.execute({ command: 'pwd', description: 'cwd', runInBackground: true }, exec)
+    await jobs.specs[0].run().done
+    assert.equal(spawns[0].argv[spawns[0].argv.indexOf('--cd') + 1], '/mnt/d/proj')
+  })
+}
+
 console.log('\n' + String(passed) + ' passed, ' + String(failed) + ' failed')
 if (failed > 0) {
   for (const failure of failures) console.error('\n' + failure)

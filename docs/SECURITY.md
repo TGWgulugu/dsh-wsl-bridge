@@ -28,6 +28,6 @@ Consequences, stated rather than hidden:
 
 ## Reporting
 
-This is a community plugin. Report security-relevant issues privately to the
-repository owner once the public repository exists; otherwise include the
-minimum reproduction in an issue without credentials or personal paths.
+This is a community plugin. Report security-relevant issues through
+https://github.com/TGWgulugu/dsh-wsl-bridge/issues and include the minimum
+reproduction, without credentials or personal paths.

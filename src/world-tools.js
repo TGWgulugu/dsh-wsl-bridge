@@ -33,9 +33,69 @@ const OUTPUT_SCHEMA = {
 }
 
 /**
+ * Phrase used in tool descriptions for the configured default workspace.
+ * @param {object} config
+ * @returns {string}
+ */
+function workspaceLabel(config) {
+  if (config.defaultWorkdir === 'home') return 'the WSL home directory'
+  if (config.defaultWorkdir === '' || config.defaultWorkdir === 'session') return 'the session directory'
+  return config.defaultWorkdir
+}
+
+/**
+ * Resolve `defaultWorkdir: 'home'` to the current distribution's `$HOME`.
+ *
+ * The lookup runs once per tool set, and only when a call actually needs the
+ * default (omitted or relative path). An absolute Linux path or a Windows path
+ * does not spawn WSL. Login profiles may print to stdout, so the value is taken
+ * from a marker line rather than the whole stream.
+ *
+ * @param {object} pool
+ * @param {object} config
+ * @returns {(pathValue: unknown) => Promise<object>}
+ */
+function createWorkspace(pool, config) {
+  /** @type {Promise<string>|undefined} */
+  let pending
+  return async function workspaceFor(pathValue) {
+    if (config.defaultWorkdir !== 'home') return config
+    if (typeof pathValue === 'string' && pathValue !== ''
+      && (isWindowsPath(pathValue) || pathValue.startsWith('/'))) {
+      return config
+    }
+    pending ??= readWslHome(pool, config).catch((error) => {
+      pending = undefined
+      throw error
+    })
+    return { ...config, defaultWorkdir: await pending }
+  }
+}
+
+/**
+ * @param {object} pool
+ * @param {object} config
+ * @returns {Promise<string>}
+ */
+async function readWslHome(pool, config) {
+  const result = await pool.runOnce({
+    command: "printf '\\n__WSL_HOME__%s\\n' \"$HOME\"",
+    timeoutMs: config.fileTimeoutMs,
+  })
+  const matches = [...String(result.stdout ?? '').matchAll(/__WSL_HOME__([^\r\n]*)/gu)]
+  const home = matches.length === 0 ? '' : matches[matches.length - 1][1]
+  if (result.timedOut === true || result.aborted === true || result.exitCode !== 0
+    || !home.startsWith('/') || home.includes('\0')) {
+    const detail = String(result.stderr ?? '').trim()
+    throw new Error('could not resolve the WSL home directory' + (detail === '' ? '' : ': ' + detail))
+  }
+  return home
+}
+
+/**
  * Resolve a tool path: Windows paths are translated, absolute Linux paths are
- * used as given, and relative paths resolve against the session directory
- * translated to `/mnt/<drive>`.
+ * used as given, and relative paths resolve against the default workspace
+ * (the session directory, or `$HOME` after `workspaceFor` has filled it in).
  *
  * @param {unknown} value - the call's `path` argument.
  * @param {object|undefined} exec - tool execution facts.
@@ -47,7 +107,7 @@ export function resolveWorldPath(value, exec, config) {
   if (isWindowsPath(value) || value.startsWith('/')) return ensureLinuxPath(value)
   const workdir = toLinuxWorkdir(undefined, exec, config)
   if (workdir === undefined || workdir === '') {
-    throw new Error('relative path "' + value + '" needs a session working directory; pass an absolute Linux path')
+    throw new Error('relative path "' + value + '" needs a working directory; pass an absolute Linux path')
   }
   return ensureLinuxPath(workdir.replace(/\/+$/u, '') + '/' + value.replace(/^\.\//u, ''))
 }
@@ -59,19 +119,21 @@ export function resolveWorldPath(value, exec, config) {
  * @returns {object[]}
  */
 export function buildWorldTools({ pool, config, subprocess, jobs }) {
+  const workspaceFor = createWorkspace(pool, config)
+  const where = workspaceLabel(config)
   return [
-    bashTool({ pool, config, subprocess, jobs }),
-    readTool({ pool, config }),
-    writeTool({ pool, config }),
-    editTool({ pool, config }),
-    grepTool({ pool, config }),
-    globTool({ pool, config }),
+    bashTool({ pool, config, subprocess, jobs, workspaceFor, where }),
+    readTool({ pool, config, workspaceFor, where }),
+    writeTool({ pool, config, workspaceFor, where }),
+    editTool({ pool, config, workspaceFor }),
+    grepTool({ pool, config, workspaceFor, where }),
+    globTool({ pool, config, workspaceFor, where }),
     envTool({ pool, config }),
   ]
 }
 
 /** `bash` - persistent bash inside the WSL distribution. */
-function bashTool({ pool, config, subprocess, jobs }) {
+function bashTool({ pool, config, subprocess, jobs, workspaceFor, where }) {
   return {
     name: 'bash',
     description: [
@@ -79,6 +141,7 @@ function bashTool({ pool, config, subprocess, jobs }) {
       'It is a real Linux kernel and bash, not PowerShell: send bash syntax.',
       'The shell is persistent per session: `cd`, exported variables and functions',
       'survive between calls, so use absolute paths or an explicit `cd`.',
+      'The first command starts in ' + where + ' unless `workdir` is set.',
       'Everything this session touches is a Linux path; Windows files are reachable',
       'as `/mnt/<drive>/...`. stdout and stderr are followed by `[exit code: N]`.',
     ].join(' '),
@@ -117,12 +180,14 @@ function bashTool({ pool, config, subprocess, jobs }) {
           })
         }
       }
-      // Same persistence rule as the host tool: explicit workdir wins; the
-      // session directory is only the shell's initial cwd.
+      // Explicit workdir wins. The default workspace is only the shell's initial
+      // directory; a shell that already exists keeps its own cwd.
       const explicit = typeof args.workdir === 'string' && args.workdir !== ''
+      const shellReady = args.runInBackground !== true && typeof pool.has === 'function' && pool.has(key)
+      const active = shellReady && !explicit ? config : await workspaceFor(explicit ? args.workdir : undefined)
       const workdir = explicit
-        ? toLinuxWorkdir(args.workdir, exec, config)
-        : (typeof pool.has === 'function' && pool.has(key) ? undefined : toLinuxWorkdir(undefined, exec, config))
+        ? toLinuxWorkdir(args.workdir, exec, active)
+        : (shellReady ? undefined : toLinuxWorkdir(undefined, exec, active))
       const timeoutMs = clampTimeout(args.timeoutMs, config.timeoutMs)
       if (args.runInBackground === true) {
         return startBackground({ config, subprocess, jobs, exec, command, workdir, label: String(args.description ?? command) })
@@ -142,12 +207,12 @@ function bashTool({ pool, config, subprocess, jobs }) {
 }
 
 /** `read` - read a Linux path. */
-function readTool({ pool, config }) {
+function readTool({ pool, config, workspaceFor, where }) {
   return {
     name: 'read',
     description: [
       'Read a text file by Linux path (for example `/home/me/project/app.js`).',
-      'Relative paths resolve against the session directory; Windows paths are',
+      'Relative paths resolve against ' + where + '; Windows paths are',
       'translated. `offset` (0-based) and `limit` select a line window.',
     ].join(' '),
     parameters: {
@@ -163,7 +228,8 @@ function readTool({ pool, config }) {
     output: { schema: OUTPUT_SCHEMA, render: renderEnvelope },
     isConcurrencySafe: () => true,
     async execute(args, exec) {
-      const path = resolveWorldPath(args.path, exec, config)
+      const active = await workspaceFor(args.path)
+      const path = resolveWorldPath(args.path, exec, active)
       const original = await readText(pool, { path, maxBytes: config.maxFileBytes, timeoutMs: config.fileTimeoutMs })
       let text = original.text
       if (args.offset !== undefined || args.limit !== undefined) {
@@ -181,12 +247,12 @@ function readTool({ pool, config }) {
 }
 
 /** `write` - atomic write on the WSL side. */
-function writeTool({ pool, config }) {
+function writeTool({ pool, config, workspaceFor, where }) {
   return {
     name: 'write',
     description: [
       'Create or overwrite a text file on the WSL side, atomically. Relative paths',
-      'resolve against the session directory; Windows paths are translated.',
+      'resolve against ' + where + '; Windows paths are translated.',
       'Pass `expectedSha256` to refuse the write when the file changed since you',
       'read it. Parent directories are not created automatically.',
     ].join(' '),
@@ -203,7 +269,8 @@ function writeTool({ pool, config }) {
     output: { schema: OUTPUT_SCHEMA, render: renderEnvelope },
     isConcurrencySafe: () => true,
     async execute(args, exec) {
-      const path = resolveWorldPath(args.path, exec, config)
+      const active = await workspaceFor(args.path)
+      const path = resolveWorldPath(args.path, exec, active)
       const written = await writeText(pool, {
         path,
         text: String(args.content),
@@ -223,13 +290,13 @@ function writeTool({ pool, config }) {
 }
 
 /** `edit` - string replacement fenced by sha256. */
-function editTool({ pool, config }) {
+function editTool({ pool, config, workspaceFor }) {
   return {
     name: 'edit',
     description: [
       'Replace a string in a file on the WSL side. `oldString` must be unique',
-      'unless `replaceAll` is true. The read-modify-write is fenced by sha256, so a',
-      'concurrent edit is reported as stale instead of being overwritten.',
+      'unless `replaceAll` is true. A best-effort sha256 check detects stale content',
+      'before rename; avoid concurrent external writes (no atomic compare-and-swap).',
     ].join(' '),
     parameters: {
       type: 'object',
@@ -245,7 +312,8 @@ function editTool({ pool, config }) {
     output: { schema: OUTPUT_SCHEMA, render: renderEnvelope },
     isConcurrencySafe: () => true,
     async execute(args, exec) {
-      const path = resolveWorldPath(args.path, exec, config)
+      const active = await workspaceFor(args.path)
+      const path = resolveWorldPath(args.path, exec, active)
       const edited = await editText(pool, {
         path,
         oldString: String(args.oldString),
@@ -270,12 +338,12 @@ function editTool({ pool, config }) {
 }
 
 /** `grep` - search file contents inside the distribution. */
-function grepTool({ pool, config }) {
+function grepTool({ pool, config, workspaceFor, where }) {
   return {
     name: 'grep',
     description: [
       'Search file contents inside the WSL distribution with GNU grep -E, returning',
-      '`path:line: text` rows. `path` defaults to the session directory. Skips',
+      '`path:line: text` rows. `path` defaults to ' + where + '. Skips',
       'hidden entries, node_modules and VCS metadata; `.gitignore` is not read.',
       '`include` filters file names like `*.ts`.',
     ].join(' '),
@@ -292,9 +360,10 @@ function grepTool({ pool, config }) {
     output: { schema: OUTPUT_SCHEMA, render: renderEnvelope },
     isConcurrencySafe: () => true,
     async execute(args, exec) {
+      const active = await workspaceFor(args.path)
       const root = typeof args.path === 'string' && args.path !== ''
-        ? resolveWorldPath(args.path, exec, config)
-        : defaultRoot(exec, config)
+        ? resolveWorldPath(args.path, exec, active)
+        : defaultRoot(exec, active)
       const include = typeof args.include === 'string' ? args.include : ''
       const result = await grepFiles(pool, {
         pattern: String(args.pattern), root, include, maxMatches: 250, timeoutMs: config.fileTimeoutMs,
@@ -309,14 +378,13 @@ function grepTool({ pool, config }) {
 }
 
 /** `glob` - list files inside the distribution. */
-function globTool({ pool, config }) {
+function globTool({ pool, config, workspaceFor, where }) {
   return {
     name: 'glob',
     description: [
       'List files inside the WSL distribution matching a glob pattern (`**`, `*`,',
-      '`?`, `[...]`, `{a,b}`). Results are relative to `path` (default: the session',
-      'directory) and sorted oldest-first. Hidden entries and node_modules are',
-      'skipped.',
+      '`?`, `[...]`, `{a,b}`). Results are relative to `path` (default: ' + where + ')',
+      'and sorted oldest-first. Hidden entries and node_modules are skipped.',
     ].join(' '),
     parameters: {
       type: 'object',
@@ -330,9 +398,10 @@ function globTool({ pool, config }) {
     output: { schema: OUTPUT_SCHEMA, render: renderEnvelope },
     isConcurrencySafe: () => true,
     async execute(args, exec) {
+      const active = await workspaceFor(args.path)
       const root = typeof args.path === 'string' && args.path !== ''
-        ? resolveWorldPath(args.path, exec, config)
-        : defaultRoot(exec, config)
+        ? resolveWorldPath(args.path, exec, active)
+        : defaultRoot(exec, active)
       const result = await globFiles(pool, {
         pattern: String(args.pattern), root, maxResults: 100, timeoutMs: config.fileTimeoutMs,
       })
@@ -374,7 +443,7 @@ function envTool({ pool, config }) {
 }
 
 /**
- * Default search root: the session directory translated to `/mnt/<drive>`.
+ * Default search root: the configured workspace (session directory or `$HOME`).
  * @param {object|undefined} exec
  * @param {object} config
  * @returns {string}

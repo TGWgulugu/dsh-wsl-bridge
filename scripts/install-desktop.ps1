@@ -1,19 +1,25 @@
 # Install this bundle into the official DSH Desktop profile and explain the restart.
 #
 #   pwsh -File scripts/install-desktop.ps1
-#   pwsh -File scripts/install-desktop.ps1 -Cli 'D:\DSH\resources\runtime\cli\bin\dsh.cmd'
+#   pwsh -File scripts/install-desktop.ps1 -Cli <path-to-dsh.cmd>
 #
 # The host half only loads on the next DSH Desktop start: quit the app from the
 # tray, then open it again.
 [CmdletBinding()]
 param(
-  [string]$Cli = 'D:\DSH\resources\runtime\cli\bin\dsh.cmd',
+  [string]$Cli = '',
   [string]$Profile = 'desktop',
   [string]$PackageDir = (Split-Path -Parent $PSScriptRoot)
 )
 
 $ErrorActionPreference = 'Stop'
-if (-not (Test-Path $Cli)) { throw "DSH CLI not found: $Cli (pass -Cli <path>)" }
+if ($Cli -eq '') {
+  $onPath = Get-Command dsh.cmd -ErrorAction SilentlyContinue
+  if ($onPath) { $Cli = $onPath.Source }
+}
+if ($Cli -eq '' -or -not (Test-Path $Cli)) {
+  throw 'DSH CLI not found. Pass -Cli <path to dsh.cmd>, or put dsh.cmd on PATH.'
+}
 if (-not (Test-Path (Join-Path $PackageDir 'package.json'))) { throw "not a package directory: $PackageDir" }
 
 $env:DSH_HOME = $null

@@ -16,8 +16,10 @@
  * @module dsh-wsl-bridge/self-check
  */
 import { appendFileSync } from 'node:fs'
+import { fileURLToPath } from 'node:url'
 import { editText, readText, writeText } from './fsops.js'
 import { startWslBackgroundJob } from './jobs.js'
+import { windowsPathToLinux } from './paths.js'
 
 /**
  * @param {object} ctx - cordis context (logging only).
@@ -98,9 +100,11 @@ export async function runSelfCheck(ctx, pool, config, tools, services = {}) {
   // including the session-cwd -> /mnt/<drive> default workdir translation.
   try {
     const bash = tools.find((tool) => tool.name === 'wsl_bash')
-    const exec = { agent: { session: { header: { cwd: 'D:\\try\\experiment' } } } }
+    const packageDir = fileURLToPath(new URL('..', import.meta.url))
+    const linuxDir = windowsPathToLinux(packageDir)?.replace(/\/+$/u, '') ?? ''
+    const exec = { agent: { session: { header: { cwd: packageDir } } } }
     const value = await bash.execute({ command: 'echo TOOL_LAYER_OK; pwd', description: 'self-check' }, exec)
-    const ok = value.text.includes('TOOL_LAYER_OK') && value.text.includes('/mnt/d/try/experiment')
+    const ok = linuxDir !== '' && value.text.includes('TOOL_LAYER_OK') && value.text.includes(linuxDir)
     lines.push('tool wsl_bash=' + (ok ? 'OK' : 'MISMATCH') + ' exit=' + String(value.exitCode))
     lines.push('tool output=' + value.text.trim().replace(/\n/gu, ' | '))
     await bash.execute({ command: 'cd /tmp && pwd', description: 'self-check cd' }, exec)

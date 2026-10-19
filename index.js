@@ -12,7 +12,7 @@
  *   wsl_path   Windows <-> Linux path conversion (wslpath first, mapping fallback)
  *   wsl_env    distro / kernel / user / toolchain report
  *
- * Design constraints (see _scratch/p1/DESIGN.md in the development workspace):
+ * Design constraints (also summarized in docs/ARCHITECTURE.md):
  *  - ZERO dependencies and NO build step: only Node built-ins are imported, so
  *    the package mounts from a profile `node_modules` directory without the
  *    host's package-resolution interception biting (a `file:` row outside the

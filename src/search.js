@@ -28,7 +28,7 @@ const PRUNE = ['node_modules', '.git', '.hg', '.svn', '.dsh']
 export async function grepFiles(pool, { pattern, root, include = '', maxMatches = 250, timeoutMs = 30_000 }) {
   const cap = Math.max(1, Math.trunc(maxMatches))
   const argv = [
-    'grep', '-rnIE', '--color=never',
+    'grep', '-rnHIE', '--color=never', "--exclude-dir='.*'", "--exclude='.*'",
     ...PRUNE.map((dir) => '--exclude-dir=' + shellQuote(dir)),
     ...(include === '' ? [] : ['--include=' + shellQuote(include)]),
     '-e', shellQuote(pattern), shellQuote(root),
@@ -36,13 +36,14 @@ export async function grepFiles(pool, { pattern, root, include = '', maxMatches 
   const command = argv.join(' ') + ' | head -n ' + String(cap + 1)
     + '; st=${PIPESTATUS[0]}; printf "\\n__WSL_GREP_STATUS=%s\\n" "$st"'
   const result = await pool.runOnce({ command, timeoutMs })
-  const status = /__WSL_GREP_STATUS=(\d+)/u.exec(result.stdout)
+  const status = /\n__WSL_GREP_STATUS=(\d+)\n?$/u.exec(result.stdout)
   const body = result.stdout.replace(/\n?__WSL_GREP_STATUS=\d+\n?$/u, '')
   const exit = status === null ? result.exitCode : Number(status[1])
-  if (exit === 2) {
-    return { matches: [], truncated: false, error: result.stderr.trim() || 'grep failed' }
-  }
   const lines = body.split('\n').filter((line) => line !== '')
+  if (result.timedOut || result.aborted || result.exitCode !== 0
+    || (exit !== 0 && exit !== 1 && !(exit === 141 && lines.length > cap))) {
+    return { matches: [], truncated: false, error: result.stderr.trim() || 'grep failed (exit ' + String(exit) + ')' }
+  }
   const truncated = lines.length > cap
   const kept = lines.slice(0, cap).map((line) => normalizeGrepLine(line, root))
   return { matches: kept, truncated, error: null }
@@ -57,10 +58,21 @@ export async function grepFiles(pool, { pattern, root, include = '', maxMatches 
  */
 export async function globFiles(pool, { pattern, root, maxResults = 100, timeoutMs = 30_000 }) {
   const cap = Math.max(1, Math.trunc(maxResults))
-  const command = 'find ' + shellQuote(root) + ' -type f -printf "%T@ %p\\n" 2>/dev/null | head -n 50000'
+  const command = 'find ' + shellQuote(root) + ' -mindepth 1 \\( -name ' + shellQuote('.*')
+    + ' -o -name node_modules \\) -prune -o -type f -printf "%T@ %p\\n" | head -n 50001'
+    + '; st=${PIPESTATUS[0]}; printf "\\n__WSL_FIND_STATUS=%s\\n" "$st"'
   const result = await pool.runOnce({ command, timeoutMs })
+  const status = /\n__WSL_FIND_STATUS=(\d+)\n?$/u.exec(result.stdout)
+  const body = result.stdout.replace(/\n?__WSL_FIND_STATUS=\d+\n?$/u, '')
+  const lines = body.split('\n').filter((line) => line !== '')
+  const exit = status === null ? result.exitCode : Number(status[1])
+  const scanTruncated = lines.length > 50000
+  if (result.timedOut || result.aborted || result.exitCode !== 0
+    || (exit !== 0 && !(exit === 141 && scanTruncated))) {
+    throw new Error('glob failed: ' + (result.stderr.trim() || 'exit ' + String(exit)))
+  }
   const entries = []
-  for (const line of result.stdout.split('\n')) {
+  for (const line of lines.slice(0, 50000)) {
     if (line === '') continue
     const gap = line.indexOf(' ')
     if (gap <= 0) continue
@@ -73,7 +85,7 @@ export async function globFiles(pool, { pattern, root, maxResults = 100, timeout
     entries.push({ relative, mtime: Number.isFinite(mtime) ? mtime : 0 })
   }
   entries.sort((a, b) => a.mtime - b.mtime || a.relative.localeCompare(b.relative))
-  const truncated = entries.length > cap
+  const truncated = scanTruncated || entries.length > cap
   return { files: entries.slice(0, cap).map((entry) => entry.relative), truncated }
 }
 
@@ -105,8 +117,9 @@ export function renderGrep(result, root, cap) {
  */
 export function renderGlob(result, root, pattern, cap) {
   if (result.files.length === 0) return 'No files matching ' + pattern + ' in ' + root
+    + (result.truncated ? '\n[scan truncated; more matches may exist]' : '')
   const lines = result.files.map((file) => root.replace(/\/$/u, '') + '/' + file)
-  if (result.truncated) lines.push('[results truncated at ' + String(cap) + ' files]')
+  if (result.truncated) lines.push('[results or scan truncated; showing at most ' + String(cap) + ' files]')
   return lines.join('\n')
 }
 
@@ -147,7 +160,7 @@ function relativeTo(root, full) {
  */
 function isPruned(relative) {
   const parts = relative.split('/')
-  for (const part of parts.slice(0, -1)) {
+  for (const part of parts) {
     if (PRUNE.includes(part)) return true
     if (part.startsWith('.') && part !== '.' && part !== '..') return true
   }

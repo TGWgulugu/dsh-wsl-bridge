@@ -14,6 +14,8 @@
  * @module dsh-wsl-bridge/fsops
  */
 
+import { createHash } from 'node:crypto'
+
 /**
  * Quote a value for bash (single quotes, embedded quotes escaped).
  * @param {string} value
@@ -28,38 +30,25 @@ export function shellQuote(value) {
  *
  * @param {object} pool - shell pool (`runOnce`).
  * @param {{path: string, maxBytes?: number, timeoutMs?: number}} request
- * @returns {Promise<{text: string, truncated: boolean, bytes: number}>}
+ * @returns {Promise<{text: string, truncated: boolean, bytes: number, sha256: string}>}
  */
 export async function readText(pool, { path, maxBytes = 2 * 1024 * 1024, timeoutMs = 30_000 }) {
   const cap = Math.max(1_024, maxBytes)
   const result = await pool.runOnce({
-    command: 'head -c ' + String(cap + 1) + ' -- ' + shellQuote(path) + ' | base64 -w 0',
+    command: 'set -o pipefail; head -c ' + String(cap + 1) + ' -- ' + shellQuote(path) + ' | base64 -w 0',
     timeoutMs,
   })
   if (result.exitCode !== 0) {
     throw new Error('cannot read ' + path + ': ' + (result.stderr.trim() || 'exit code ' + String(result.exitCode)))
   }
+  if (result.truncated || result.spillPath) {
+    throw new Error('file transport was truncated; use a smaller maxFileBytes or read it inside WSL')
+  }
   const raw = Buffer.from(result.stdout.trim(), 'base64')
   const truncated = raw.length > cap
   const bytes = truncated ? raw.subarray(0, cap) : raw
-  return { text: bytes.toString('utf8'), truncated, bytes: bytes.length }
-}
-
-/**
- * The sha256 of a file on the WSL side, or an empty string when it does not exist.
- *
- * @param {object} pool
- * @param {string} path
- * @param {number} timeoutMs
- * @returns {Promise<string>}
- */
-export async function sha256Of(pool, path, timeoutMs = 30_000) {
-  const result = await pool.runOnce({
-    command: 'sha256sum -- ' + shellQuote(path) + " 2>/dev/null | cut -d' ' -f1",
-    timeoutMs,
-  })
-  if (result.exitCode !== 0) return ''
-  return result.stdout.trim()
+  return { text: bytes.toString('utf8'), truncated, bytes: bytes.length,
+    sha256: createHash('sha256').update(bytes).digest('hex') }
 }
 
 /**
@@ -74,26 +63,29 @@ export async function sha256Of(pool, path, timeoutMs = 30_000) {
  * @returns {Promise<{ok: boolean, code?: string, current?: string, bytes: number, sha256: string}>}
  */
 export async function writeText(pool, { path, text, expectedSha256 = '', timeoutMs = 30_000 }) {
-  if (expectedSha256 !== '') {
-    const current = await sha256Of(pool, path, timeoutMs)
-    if (current !== expectedSha256) {
-      return { ok: false, code: 'stale', current, bytes: 0, sha256: current }
-    }
-  }
-
   const slash = path.lastIndexOf('/')
   const directory = slash <= 0 ? '/' : path.slice(0, slash)
   const command = [
     't=$(mktemp ' + shellQuote(directory + '/.dsh-wsl-bridge.XXXXXX') + ') || exit 1',
     "trap 'rm -f -- \"$t\"' EXIT",
+    'set -o pipefail',
     'base64 -d > "$t"',
-    'chmod 600 -- "$t"',
-    'mv -f -- "$t" ' + shellQuote(path),
+    'if [ -e ' + shellQuote(path) + ' ]; then chmod --reference=' + shellQuote(path) + ' -- "$t"; fi',
+    ...(expectedSha256 === '' ? [] : [
+      '{ current=$(sha256sum < ' + shellQuote(path) + ' 2>/dev/null) || current=""; }',
+      'current=${current%% *}',
+      'if [ "$current" != ' + shellQuote(expectedSha256) + ' ]; then printf "%s\\n" "$current"; exit 73; fi',
+    ]),
+    'mv -fT -- "$t" ' + shellQuote(path),
     'sha256sum -- ' + shellQuote(path) + " | cut -d' ' -f1",
   ].join(' && ')
 
   const payload = Buffer.from(text, 'utf8').toString('base64')
   const result = await pool.runOnce({ command, input: payload, timeoutMs })
+  if (expectedSha256 !== '' && result.exitCode === 73) {
+    const current = result.stdout.trim()
+    return { ok: false, code: 'stale', current, bytes: 0, sha256: current }
+  }
   if (result.exitCode !== 0) {
     throw new Error('cannot write ' + path + ': ' + (result.stderr.trim() || 'exit code ' + String(result.exitCode)))
   }
@@ -106,9 +98,8 @@ export async function writeText(pool, { path, text, expectedSha256 = '', timeout
 
 /**
  * Fetch fresh content, apply a string replacement in the host, write it back
- * under a sha256 fence. The read-modify-write gap is covered by that fence: a
- * concurrent change between the read and the write is reported as stale instead
- * of being silently overwritten.
+ * under a best-effort sha256 fence. Hash the exact bytes read, then recheck just
+ * before rename. This is not an atomic compare-and-swap against external writers.
  *
  * @param {object} pool
  * @param {{path: string, oldString: string, newString: string, replaceAll?: boolean,
@@ -130,10 +121,13 @@ export async function editText(pool, {
     throw new Error('oldString appears ' + String(occurrences) + ' times in ' + path
       + '; pass replaceAll: true or use a unique string')
   }
-  const expected = await sha256Of(pool, path, timeoutMs)
+  const expected = original.sha256
+  if (createHash('sha256').update(original.text, 'utf8').digest('hex') !== expected) {
+    throw new Error('file is not valid UTF-8; edit it inside WSL instead')
+  }
   const updated = replaceAll
     ? original.text.split(oldString).join(newString)
-    : original.text.replace(oldString, newString)
+    : original.text.replace(oldString, () => newString)
   const written = await writeText(pool, { path, text: updated, expectedSha256: expected, timeoutMs })
   return { ...written, replacements: replaceAll ? occurrences : 1 }
 }

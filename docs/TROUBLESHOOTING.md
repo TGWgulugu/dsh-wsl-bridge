@@ -30,6 +30,10 @@ see it, you are running a build older than 0.2.0.
 - A preset whose activation failed stays on the roster with a diagnostic and
   cannot compose a session; check the host log for `preset-wsl`.
 - The preset is Windows-only, like the rest of the bundle.
+- A card showing `plan-mode ... needs a non-empty section` comes from the
+  pre-0.4.4 patch. Install 0.4.4 or newer and fully restart the host. A roster
+  diagnostic must show `id: wsl` with `broken: null`; mounting `wsl-world` alone
+  does not prove the complete preset activated.
 
 ## First WSL command is slow
 

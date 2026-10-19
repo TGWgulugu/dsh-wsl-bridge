@@ -1,5 +1,31 @@
 # Changelog
 
+## 0.4.6 — 2026-10-19 (unreleased)
+
+- A `WSL` session now uses the current distribution's `$HOME` as its default
+  workspace. The first bash command, relative paths, and grep/glob without a
+  path all start there instead of the Windows session directory. The home path
+  is read once; an explicit absolute path does not trigger the lookup. Host-wide
+  `wsl_*` tools still default to the session directory.
+
+## 0.4.5 — 2026-10-19 (unreleased)
+
+- Fail reads when `head` fails; reject incomplete transport and invalid UTF-8
+  edits instead of silently changing file data. Base edit guards on the exact
+  bytes read and check just before rename, including deletion detection.
+- Keep replacement dollar sequences literal, preserve existing file modes,
+  and refuse directory targets without leaving a temporary file inside them.
+- Stop every command line when the requested working directory cannot be used.
+  Background jobs use the session directory even after a persistent shell exists.
+- Search prunes hidden entries and dependency trees before scanning, preserves
+  single-file grep paths, anchors its status marker, reports failures, and marks
+  the glob scan ceiling as truncated.
+- Make release dry-runs independent of login, check official-registry auth and
+  a clean working tree for publication, publish the packed tarball, and fail if
+  version verification fails. Include installation/release scripts in the pack.
+- Add regression coverage and opt-in real WSL tests; fix the CI mount test's
+  hard-coded local path.
+
 ## 0.4.4 — 2026-10-19
 
 - **Fix the `WSL` preset failing to load**: the `plan-mode` row was copied
@@ -8,7 +34,7 @@
   "load failed" in the mode picker while the rest of the plugin worked. The
   shipped standard preset's section text is now carried verbatim; the roster
   probe reports `wsl: broken=null`.
-- Add the preset-roster diagnostic recipe used to find it (see HANDOVER.md).
+- Add the preset-roster diagnostic recipe used to find it (see docs/TROUBLESHOOTING.md).
 
 ## 0.4.3 — 2026-10-19
 

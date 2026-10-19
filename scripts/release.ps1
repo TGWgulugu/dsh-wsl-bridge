@@ -1,37 +1,48 @@
 # Release checklist for dsh-wsl-bridge.
 #
-#   pwsh -File scripts/release.ps1 -Version 0.5.0
+#   npm version 0.5.0 --no-git-tag-version
+#   # Commit the version and release notes, then:
+#   pwsh -File scripts/release.ps1
 #
 # Runs the tests, packs, checks npm authentication, publishes to the official
 # registry, and verifies the published version. It refuses to publish while the
 # working tree is dirty or npm is not authenticated.
 [CmdletBinding()]
-param(
-  [string]$Version,
-  [switch]$DryRun
-)
+param([switch]$DryRun)
 
 $ErrorActionPreference = 'Stop'
 Push-Location (Split-Path -Parent $PSScriptRoot)
 try {
-  if ($Version) { npm version $Version --no-git-tag-version; if ($LASTEXITCODE -ne 0) { throw 'npm version failed' } }
+  $registry = 'https://registry.npmjs.org'
+  if (-not $DryRun) {
+    $status = @(git status --porcelain)
+    if ($LASTEXITCODE -ne 0) { throw 'git status failed' }
+    if ($status.Count -gt 0) { throw 'working tree is dirty: commit the release changes first' }
+  }
   npm test
   if ($LASTEXITCODE -ne 0) { throw 'tests failed' }
 
-  $who = (npm whoami 2>$null)
-  if (-not $who) { throw 'npm is not authenticated: run `npm login` first' }
+  if (-not $DryRun) {
+    $who = npm whoami --registry $registry 2>$null
+    if ($LASTEXITCODE -ne 0 -or -not $who) {
+      throw 'npm is not authenticated: run `npm login --registry https://registry.npmjs.org` first'
+    }
+  }
 
-  npm pack
+  $packedJson = npm pack --json
   if ($LASTEXITCODE -ne 0) { throw 'npm pack failed' }
+  $packed = @($packedJson | ConvertFrom-Json)[0]
 
-  $args = @('publish', '--registry', 'https://registry.npmjs.org', '--access', 'public')
-  if ($DryRun) { $args += '--dry-run' }
-  npm @args
+  $publishArgs = @('publish', $packed.filename, '--registry', $registry, '--access', 'public')
+  if ($DryRun) { $publishArgs += '--dry-run' }
+  npm @publishArgs
   if ($LASTEXITCODE -ne 0) { throw 'npm publish failed' }
 
   if (-not $DryRun) {
-    $ver = (Get-Content package.json -Raw | ConvertFrom-Json).version
-    npm view "dsh-wsl-bridge@$ver" version --registry https://registry.npmjs.org
+    $published = npm view "$($packed.name)@$($packed.version)" version --registry $registry
+    if ($LASTEXITCODE -ne 0 -or "$published".Trim() -ne $packed.version) {
+      throw 'published version verification failed'
+    }
   }
 } finally {
   Pop-Location

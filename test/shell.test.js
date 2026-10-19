@@ -102,7 +102,7 @@ await test('run: workdir becomes an explicit cd; an omitted workdir keeps the cw
   const { pool } = makePool({ shell: (command) => { commands.push(command); return { stdout: '' } } })
   await pool.run('agent-a', { command: 'pwd', workdir: '/mnt/c/proj', timeoutMs: 100 })
   await pool.run('agent-a', { command: 'pwd', timeoutMs: 100 })
-  assert.deepEqual(commands, ["cd -- '/mnt/c/proj' && pwd", 'pwd'])
+  assert.deepEqual(commands, ["cd -- '/mnt/c/proj' || return $?\npwd", 'pwd'])
   await pool.disposeAll()
 })
 
@@ -117,7 +117,7 @@ await test('run: an empty command still applies the workdir prologue', async () 
 await test('run: env is exported into the persistent shell before the command', async () => {  const commands = []
   const { pool } = makePool({ shell: (command) => { commands.push(command); return { stdout: '' } } })
   await pool.run('agent-a', { command: 'printenv FOO', env: { FOO: "a'b" }, timeoutMs: 100 })
-  assert.deepEqual(commands, ["export FOO='a'\\''b' && printenv FOO"])
+  assert.deepEqual(commands, ["export FOO='a'\\''b' || return $?\nprintenv FOO"])
   await pool.disposeAll()
 })
 
@@ -413,6 +413,14 @@ await test('pool: dispose and disposeAll stop their shells', async () => {
 await test('pool: dispose is safe for an unknown agent and never rejects', async () => {
   const { pool } = makePool({})
   await pool.dispose('nobody', 'no shell')
+  await pool.disposeAll()
+})
+
+await test('runOnce: capture truncation is visible to file callers', async () => {
+  const { pool } = makePool({ once: () => ({ stdout: 'abcdefgh' }) }, { runOnceStdoutBytes: 4 })
+  const result = await pool.runOnce({ command: 'large', timeoutMs: 100 })
+  assert.equal(result.stdout, 'efgh')
+  assert.equal(result.truncated, true)
   await pool.disposeAll()
 })
 

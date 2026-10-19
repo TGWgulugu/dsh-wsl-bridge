@@ -1,6 +1,6 @@
 {
   "name": "dsh-wsl-bridge",
-  "version": "0.4.4",
+  "version": "0.4.6",
   "type": "module",
   "main": "index.js",
   "exports": {
@@ -32,10 +32,22 @@
     "icon.svg",
     "LICENSE",
     "README.md",
+    "README.en.md",
     "CHANGELOG.md",
-    "docs/*.md"
+    "scripts/*.ps1",
+    "docs/ARCHITECTURE.md",
+    "docs/SECURITY.md",
+    "docs/TROUBLESHOOTING.md"
   ],
   "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/TGWgulugu/dsh-wsl-bridge.git"
+  },
+  "bugs": {
+    "url": "https://github.com/TGWgulugu/dsh-wsl-bridge/issues"
+  },
+  "homepage": "https://github.com/TGWgulugu/dsh-wsl-bridge#readme",
   "description": "Native WSL execution for DeepSeek Harness on Windows: persistent Linux bash, Linux-path file and search tools, and a declarative WSL session mode. No extra web server and nothing to install inside the distribution.",
   "keywords": [
     "dsh",
@@ -48,6 +60,7 @@
     "workspace"
   ],
   "scripts": {
-    "test": "node test/protocol.test.js && node test/shell.test.js && node test/tools.test.js && node test/world-tools.test.js && node test/guard.test.js && node test/jobs.test.js"
+    "test": "node test/protocol.test.js && node test/shell.test.js && node test/tools.test.js && node test/world-tools.test.js && node test/guard.test.js && node test/jobs.test.js && node test/fsops.test.js",
+    "test:integration": "node test/integration.test.js"
   }
 }

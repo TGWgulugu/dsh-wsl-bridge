@@ -154,8 +154,7 @@ function bashTool({ pool, config, subprocess, jobs }) {
       'It is a real Linux kernel and bash — not PowerShell: send bash syntax.',
       'The shell is persistent per session: `cd`, exported variables and functions',
       'survive between calls, so use absolute paths or an explicit `cd` when you need',
-      'a known directory. A command ending in `&` returns immediately; write long',
-      'background work as `( command > log 2>&1 ) &` on its own line.',
+      'a known directory. Use runInBackground for long-running background work.',
       'stdout and stderr are returned, followed by `[exit code: N]`.',
       'The working directory defaults to the session directory translated to',
       '`/mnt/<drive>/...`; pass `workdir` to change it.',
@@ -203,7 +202,7 @@ function bashTool({ pool, config, subprocess, jobs }) {
       const explicit = typeof args.workdir === 'string' && args.workdir !== ''
       const workdir = explicit
         ? toLinuxWorkdir(args.workdir, exec, config)
-        : (typeof pool.has === 'function' && pool.has(key) ? undefined : toLinuxWorkdir(undefined, exec, config))
+        : (args.runInBackground !== true && typeof pool.has === 'function' && pool.has(key) ? undefined : toLinuxWorkdir(undefined, exec, config))
       const timeoutMs = clampTimeout(args.timeoutMs, config.timeoutMs)
       if (args.runInBackground === true) {
         return startBackground({ config, subprocess, jobs, exec, command, workdir, label: String(args.description ?? command) })
@@ -315,8 +314,8 @@ function editTool({ pool, config }) {
     description: [
       'Replace a string in a file on the WSL side by absolute Linux path.',
       '`oldString` must be unique unless `replaceAll` is true. The read-modify-write',
-      'is fenced by sha256, so a concurrent edit is reported as stale instead of',
-      'being overwritten.',
+      'uses a best-effort sha256 check before rename to detect stale content.',
+      'Avoid concurrent external writes; this is not an atomic compare-and-swap.',
     ].join(' '),
     parameters: {
       type: 'object',

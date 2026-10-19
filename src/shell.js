@@ -301,6 +301,7 @@ export function createShellPool(options) {
     if (settleError !== null) errorText = (errorText === '' ? '' : '\n') + '[subprocess error: ' + messageOf(settleError) + ']'
     return makeResult({
       stdout: visibleOut.text,
+      truncated: visibleOut.truncated || stdout.lossy === true,
       stderr: visibleErr.text + errorText,
       exitCode: timedOut ? TIMEOUT_EXIT_CODE : numberOrNull(outcome?.exitCode),
       signal: typeof outcome?.signal === 'string' ? outcome.signal : null,
@@ -686,7 +687,7 @@ function composeCommand(req) {
   // An empty command still has to apply the cd/export prologue, and a trailing
   // '&&' with nothing after it would be a syntax error.
   if (body.trim() === '') return prologue.join(' && ')
-  return prologue.join(' && ') + ' && ' + body
+  return prologue.map((line) => line + ' || return $?').join('\n') + '\n' + body
 }
 
 /**
@@ -705,6 +706,7 @@ function readWholeStream(handle, channel) {
     if (read === undefined || read === null) return { text: '' }
     return {
       text: typeof read.text === 'string' ? read.text : '',
+      lossy: read.lossy === true,
       ...(typeof read.spillPath === 'string' && read.spillPath !== '' ? { spillPath: read.spillPath } : {}),
     }
   } catch {
@@ -732,6 +734,7 @@ function makeResult(fields) {
     timeoutMs: fields.timeoutMs ?? 0,
   }
   if (fields.shellRestarted === true) result.shellRestarted = true
+  if (fields.truncated === true) result.truncated = true
   if (typeof fields.spillPath === 'string' && fields.spillPath !== '') result.spillPath = fields.spillPath
   return result
 }
