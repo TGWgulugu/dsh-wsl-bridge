@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "WSL Bridge",
+    "description": "Native WSL execution for DSH on Windows: persistent Linux bash, Linux-path file and search tools, and a WSL session mode — no extra web server, nothing to install inside the distribution."
+  }
+}
