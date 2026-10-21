@@ -4,11 +4,11 @@
 
 A native WSL (Linux) execution surface for [DSH](https://github.com/deepseek-ai/DeepSeek-Harness) on Windows. It starts no extra web server and installs nothing inside the distribution. Windows sessions and WSL sessions share one desktop app.
 
-Version **0.4.7**. Requires **Windows**, a working WSL distribution, and **DSH `>= 0.2.1-rc.2`**. Source: <https://github.com/TGWgulugu/dsh-wsl-bridge>
+Version **0.4.7**. Requires **Windows**, a working WSL distribution, and **DSH `>= 0.2.1-rc.2`**. It is listed in [dsh-market](https://github.com/dsh-market/dsh-market): search for `dsh-wsl-bridge` in the plugin market, under the WSL category. Source: <https://github.com/TGWgulugu/dsh-wsl-bridge>
 
 ## Install
 
-The plugin is published on npm as [dsh-wsl-bridge](https://www.npmjs.com/package/dsh-wsl-bridge). Run this in a normal terminal, not inside a DSH tool sandbox. DSH installs that npm package. If `dsh` is not on `PATH`, use the full path to the `dsh.cmd` that ships with DSH Desktop.
+Search for `dsh-wsl-bridge` in DSH's plugin market ([dsh-market](https://github.com/dsh-market/dsh-market)) and install it from the WSL category. The package is also published on npm as [dsh-wsl-bridge](https://www.npmjs.com/package/dsh-wsl-bridge). Run the command below in a normal terminal, not inside a DSH tool sandbox. DSH installs that npm package. If `dsh` is not on `PATH`, use the full path to the `dsh.cmd` that ships with DSH Desktop.
 
 ```powershell
 dsh plugin --profile desktop add dsh-wsl-bridge
