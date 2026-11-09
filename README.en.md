@@ -4,7 +4,7 @@
 
 A native WSL (Linux) execution surface for [DSH](https://github.com/deepseek-ai/DeepSeek-Harness) on Windows. It starts no extra web server and installs nothing inside the distribution. Windows sessions and WSL sessions share one desktop app.
 
-Version **0.4.7**. Requires **Windows**, a working WSL distribution, and **DSH `>= 0.2.1-rc.2`**. It is listed in [dsh-market](https://github.com/dsh-market/dsh-market): search for `dsh-wsl-bridge` in the plugin market, under the WSL category. Source: <https://github.com/TGWgulugu/dsh-wsl-bridge>
+Version **0.4.8**. Requires **Windows**, a working WSL distribution, and **DSH `>= 0.2.2-rc.1`**. It is listed in [dsh-market](https://github.com/dsh-market/dsh-market): search for `dsh-wsl-bridge` in the plugin market, under the WSL category. Source: <https://github.com/TGWgulugu/dsh-wsl-bridge>
 
 ## Install
 

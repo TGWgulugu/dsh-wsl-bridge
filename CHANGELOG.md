@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.4.8 — 2026-11-09
+
+- Restore WSL preset activation on DSH 0.2.2-rc.1 by removing the retired
+  `@deepseek-ai/dsh-tool-subagent-control/list-agents` entry. The main
+  subagent-control plugin supplies the current control tools.
+- Use the standard preset's `modelSelection` and `modelDiscovery` options
+  for spawned subagents.
+- Require DSH `>=0.2.2-rc.1` and add regression checks for the preset
+  declaration and matching compatibility metadata.
+
 ## 0.4.7 — 2026-10-19
 
 - A new conversation that selects WSL lists the current distribution's

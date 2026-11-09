@@ -4,7 +4,7 @@
 
 在 Windows 上给 [DSH](https://github.com/deepseek-ai/DeepSeek-Harness) 一个原生的 WSL（Linux）执行面。不额外启动 web 服务，也不在 WSL 里安装 dsh。Windows 会话和 WSL 会话在同一个桌面端里使用。
 
-当前版本 **0.4.7**。需要 **Windows**、一个可用的 WSL 发行版，以及 **DSH `>= 0.2.1-rc.2`**。已收录到 [dsh-market](https://github.com/dsh-market/dsh-market)，在插件市场搜索 `dsh-wsl-bridge` 即可找到，分类是 WSL。源码：<https://github.com/TGWgulugu/dsh-wsl-bridge>
+当前版本 **0.4.8**。需要 **Windows**、一个可用的 WSL 发行版，以及 **DSH `>= 0.2.2-rc.1`**。已收录到 [dsh-market](https://github.com/dsh-market/dsh-market)，在插件市场搜索 `dsh-wsl-bridge` 即可找到，分类是 WSL。源码：<https://github.com/TGWgulugu/dsh-wsl-bridge>
 
 ## 安装
 

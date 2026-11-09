@@ -64,7 +64,7 @@ model tool call
 ## Platform and compatibility gates
 
 - Windows only: both rows carry `disabled: !!js process.platform !== 'win32'`.
-- `engines.dsh: ">=0.2.1-rc.2"` is the install-time gate the Desktop plugin
+- `engines.dsh: ">=0.2.2-rc.1"` is the install-time gate the Desktop plugin
   manager reads; the loader itself only composes bundles listed in
   `dsh.profile.bundles`.
 - Zero dependencies and no build step. This is deliberate: on DSH 0.2.1 a preset

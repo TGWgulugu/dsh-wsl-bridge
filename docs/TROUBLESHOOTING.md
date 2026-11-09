@@ -6,7 +6,7 @@
   it again (a page refresh is not enough).
 - Check the bundle is declared: `package.json` → `dsh.profile.bundles` contains
   `dsh-wsl-bridge`.
-- Check the host version: `engines.dsh` requires `>=0.2.1-rc.2`. A mismatch is
+- Check the host version: `engines.dsh` requires `>=0.2.2-rc.1`. A mismatch is
   reported by the Desktop plugin manager at install time.
 
 ## `spawn EPERM` / "cannot start wsl.exe"
@@ -29,6 +29,9 @@ see it, you are running a build older than 0.2.0.
 - Restart DSH (presets mount at start, not on page refresh).
 - A preset whose activation failed stays on the roster with a diagnostic and
   cannot compose a session; check the host log for `preset-wsl`.
+- On DSH 0.2.2, a diagnostic naming
+  `@deepseek-ai/dsh-tool-subagent-control/list-agents` comes from an older
+  bridge preset. Install 0.4.8 or newer and fully restart the host.
 - The preset is Windows-only, like the rest of the bundle.
 - A card showing `plan-mode ... needs a non-empty section` comes from the
   pre-0.4.4 patch. Install 0.4.4 or newer and fully restart the host. A roster

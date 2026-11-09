@@ -1,6 +1,6 @@
 {
   "name": "dsh-wsl-bridge",
-  "version": "0.4.7",
+  "version": "0.4.8",
   "type": "module",
   "main": "index.js",
   "exports": {
@@ -11,11 +11,11 @@
     "./icon": "./icon.svg"
   },
   "engines": {
-    "dsh": ">=0.2.1-rc.2"
+    "dsh": ">=0.2.2-rc.1"
   },
   "dsh": {
     "engines": {
-      "dsh": ">=0.2.1-rc.2"
+      "dsh": ">=0.2.2-rc.1"
     },
     "bundle": {
       "patch": "./cordis.patch.yml"
@@ -30,7 +30,7 @@
     }
   },
   "peerDependencies": {
-    "@deepseek-ai/dsh": ">=0.2.1-rc.2"
+    "@deepseek-ai/dsh": ">=0.2.2-rc.1"
   },
   "files": [
     "index.js",
@@ -70,7 +70,7 @@
     "workspace"
   ],
   "scripts": {
-    "test": "node test/protocol.test.js && node test/shell.test.js && node test/tools.test.js && node test/world-tools.test.js && node test/session-home.test.js && node test/dir-list.test.js && node test/client-workspace.test.js && node test/guard.test.js && node test/jobs.test.js && node test/fsops.test.js",
+    "test": "node test/protocol.test.js && node test/shell.test.js && node test/tools.test.js && node test/world-tools.test.js && node test/preset.test.js && node test/session-home.test.js && node test/dir-list.test.js && node test/client-workspace.test.js && node test/guard.test.js && node test/jobs.test.js && node test/fsops.test.js",
     "test:integration": "node test/integration.test.js"
   }
 }
