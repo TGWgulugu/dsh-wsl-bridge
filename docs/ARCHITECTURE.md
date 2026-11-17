@@ -11,15 +11,16 @@ second web server and without installing anything inside WSL.
 | WSL preset | `wsl-world.js` | `preset-wsl` → `wsl-world` | Declares an agent preset `WSL`; a session created in that mode gets `bash`/`read`/`write`/`edit`/`grep`/`glob`/`wsl_env` whose world is the distribution. |
 
 The preset row is a plain `@deepseek-ai/dsh-agent-preset` declaration. Its
-`plugins` list is the shipped `standard` preset with three substitutions:
+`plugins` list follows the standard preset's core composition, with WSL
+tools replacing the host shell and file tools:
 
 - `tool-bash` / `tool-pwsh` removed (they are the Windows shells);
 - `tool-fs` / `tool-fs-search` removed (host-path file tools and Windows ripgrep);
 - `wsl-world` inserted.
 
-Everything else (persona, instructions, skills, goals, plan mode, compaction,
-subagents, todo, web, present) is the shipped set, so a WSL session is a normal
-DSH session whose shell and file world happen to be Linux.
+The preset retains the standard persona, instructions, filesystem skills,
+goals, plan mode, compaction, subagents, todo, web and present plugins. On DSH
+0.2.2-rc.3, subagent control follows the shipped `interrupt: false` default.
 
 ## Why no service replacement
 

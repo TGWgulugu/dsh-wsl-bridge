@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.4.9 — 2026-11-17
+
+- Verify WSL preset activation and execution with DSH 0.2.2-rc.3.
+- Match the standard preset's `interrupt: false` subagent-control default.
+  Discovery, messaging and waiting use the host's current tools.
+- Wait for npm to expose an accepted publication before verifying its version.
+  Retry registry reads with a bounded delay and publish the tarball once.
+- Cover delayed publication visibility and exhausted retries in release checks.
+
 ## 0.4.8 — 2026-11-09
 
 - Restore WSL preset activation on DSH 0.2.2-rc.1 by removing the retired

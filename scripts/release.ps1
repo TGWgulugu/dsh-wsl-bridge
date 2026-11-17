@@ -39,9 +39,14 @@ try {
   if ($LASTEXITCODE -ne 0) { throw 'npm publish failed' }
 
   if (-not $DryRun) {
-    $published = npm view "$($packed.name)@$($packed.version)" version --registry $registry
-    if ($LASTEXITCODE -ne 0 -or "$published".Trim() -ne $packed.version) {
-      throw 'published version verification failed'
+    for ($attempt = 1; $attempt -le 30; $attempt += 1) {
+      $published = npm view "$($packed.name)@$($packed.version)" version --registry $registry --prefer-online --fetch-retries 0 --fetch-timeout 15000 2>$null
+      if ($LASTEXITCODE -eq 0 -and "$published".Trim() -eq $packed.version) { break }
+      if ($attempt -eq 30) {
+        throw 'published version verification failed after waiting for npm processing; the package upload already succeeded'
+      }
+      Write-Host "Waiting for npm to expose $($packed.name)@$($packed.version) ($attempt/30)"
+      Start-Sleep -Seconds 10
     }
   }
 } finally {
